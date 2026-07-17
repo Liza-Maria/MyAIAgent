@@ -1,6 +1,6 @@
 use meval;
 use crate::tools::error::ToolError;
-use crate::tools::tool::Tool; 
+use crate::tools::tool::Tool;  
 
 #[derive(Debug)]
 pub struct CalculatorTool;
