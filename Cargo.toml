@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/agent-cli",
+    "crates/agent-core"
+]
+
+[workspace.dependencies]
+tokio = { version = "1.38", features = ["macros", "rt-multi-thread"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "1.0"
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+anstream = "0.6.20"
+dotenvy = "0.15"
+meval = "0.2"

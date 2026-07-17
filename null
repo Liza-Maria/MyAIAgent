@@ -1,0 +1,4 @@
+   Compiling agent-core v0.1.0 (E:\Rust\MyAIAgent\crates\agent-core)
+   Compiling agent-cli v0.1.0 (E:\Rust\MyAIAgent\crates\agent-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 27.81s
+     Running `target\debug\agent-cli.exe run "Which is Romania s capital?"`
