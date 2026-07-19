@@ -4,6 +4,7 @@ use clap:: { Parser, Subcommand };
 use agent_core::llm::{ LlmClient, LlmConfig , Role, Message};
 use agent_core::agent::{ Agent, AgentConfig };
 use agent_core::tools::{ToolRegistry, CalculatorTool};
+use agent_core::memory::SlidingWindow;
 use dotenvy::dotenv;
 
 #[derive(Debug, Parser)]
@@ -60,7 +61,11 @@ async fn run(goal: String) -> Result<()> {
     let mut tools = ToolRegistry::new();
     tools.register(CalculatorTool);
 
-    let agent = Agent::new(llm_config, agent_config, tools);
+    let memory = SlidingWindow {
+        max_messages: 20,
+    };
+
+    let agent = Agent::new(llm_config, agent_config, tools, Box::new(memory));
 
     let result = agent.run(&goal).await?;
     println!("{}", result);

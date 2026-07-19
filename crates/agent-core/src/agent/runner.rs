@@ -2,20 +2,28 @@ use tracing::instrument;
 use super::{ AgentConfig, AgentError };
 use super::{ LlmClient, LlmConfig, LlmError, Message };
 use crate::tools::registry::ToolRegistry;
+use crate::memory::Memory;
 
 #[derive(Debug)]
 pub struct Agent {
     pub llm_client: LlmClient,
     pub config: AgentConfig,
     pub tool: ToolRegistry,
+    pub memory: Box<dyn Memory>,
 }
 
 impl Agent {
-    pub fn new(llm_config: LlmConfig, config: AgentConfig, tool: ToolRegistry) -> Self {
+    pub fn new(
+            llm_config: LlmConfig,
+            config: AgentConfig,
+            tool: ToolRegistry,
+            memory: Box<dyn Memory>,
+        ) -> Self {
         Self {
             llm_client: LlmClient::new(llm_config),
             config,
             tool,
+            memory,
         }
     }
 
@@ -26,8 +34,10 @@ impl Agent {
                             Message::user(current_message)];
         
         for _iteration in 0..self.config.max_iterations {
+            let history_window = self.memory.window(&history);
+
             let response = self.llm_client.chat_with_tool(
-                                                history.clone(),
+                                                history_window,
                                                 self.tool.definitions()).await?;
             
             // complete(history.clone()).await?;
@@ -73,6 +83,7 @@ mod tests {
         ResponseTemplate,
     };
     use crate::tools::calculator::CalculatorTool;
+    use crate::memory::SlidingWindow;
 
     #[tokio::test]
     async fn agent_returns_final_answer_without_tool_call() {
@@ -110,7 +121,11 @@ mod tests {
         let mut tool_registry = ToolRegistry::new();
         tool_registry.register(CalculatorTool);
 
-        let agent = Agent::new(llmConfig, agent_config, tool_registry);
+        let memory = SlidingWindow {
+            max_messages: 20,
+        };
+
+        let agent = Agent::new(llmConfig, agent_config, tool_registry, Box::new(memory));
 
         let answer = agent
                         .run("say hello")
@@ -182,7 +197,11 @@ mod tests {
         let mut tool_registry = ToolRegistry::new();
         tool_registry.register(CalculatorTool);
 
-        let agent = Agent::new(llmConfig, agent_config, tool_registry);
+        let memory = SlidingWindow {
+            max_messages: 20,
+        };
+
+        let agent = Agent::new(llmConfig, agent_config, tool_registry, Box::new(memory));
 
         let answer = agent.run("What is 240 * 0.15?")
                         .await
