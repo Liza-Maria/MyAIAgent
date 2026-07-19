@@ -11,6 +11,15 @@ pub enum EmbedError {
 
     #[error("embedding response was empty or invalid")]
     InvalidResponse,
+
+    #[error("embedding API resturned status {status}: {body}")]
+    Api {
+        status: u16,
+        body: String,
+    },
+
+    #[error("Unable to decode embedding response {0}")]
+    Decode(String),
 }
 
 #[async_trait::async_trait]
