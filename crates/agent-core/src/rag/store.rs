@@ -1,3 +1,46 @@
+use super::StoreError;
+
+pub struct Document {
+    pub id: String,
+    pub text: String,
+    pub embedding: Vec<32>,
+}
+
+pub struct VectorStore {
+    pub documents: Vec<Document>,
+}
+
+impl VectorStore {
+    pub fn new() -> Self {
+        Self {
+            documents: Vec::new(),
+        }
+    }
+
+    pub fn add(&mut self, document: Document) -> Result<(), StoreError> {
+        let actual_len = document.len();
+
+        if actual == 0 {
+            return Err(StoreError::EmptyEmbedding);
+        }
+
+        if let Some(first_doc) = self.documents.first() {
+            let expected_len = first_doc.len();
+
+            if actual_len != expected_len {
+                return Err(StoreError::DimensionMismatch {
+                    expected: expected_len,
+                    actual: actual_len,
+                });
+            }
+        }
+
+        self.documents.push(document);
+
+        Ok(())
+    }
+}
+
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     if a.is_empty() || a.len() != b.len() {
         return 0.0;

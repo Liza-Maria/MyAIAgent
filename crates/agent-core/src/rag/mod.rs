@@ -22,6 +22,17 @@ pub enum EmbedError {
     Decode(String),
 }
 
+pub enum StoreError {
+    #[error("Embedding cannot be empty.")]
+    EmptyEmbedding,
+
+    #[error("Embedding dimentions: expected {expected}, got {actual}")]
+    DimensionMismatch {
+        expected: usize,
+        actual: usize,
+    }
+}
+
 #[async_trait::async_trait]
 pub trait Embedder {
     async fn embed(&self, text: &str) -> Result<Vec<f32>, EmbedError>;
