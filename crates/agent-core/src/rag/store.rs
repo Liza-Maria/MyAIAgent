@@ -1,9 +1,11 @@
-use super::StoreError;
+use std::cmp::Ordering;
+
+use super::{ StoreError, SearchResult };
 
 pub struct Document {
     pub id: String,
     pub text: String,
-    pub embedding: Vec<32>,
+    pub embedding: Vec<f32>,
 }
 
 pub struct VectorStore {
@@ -18,14 +20,14 @@ impl VectorStore {
     }
 
     pub fn add(&mut self, document: Document) -> Result<(), StoreError> {
-        let actual_len = document.len();
+        let actual_len = document.embedding.len();
 
-        if actual == 0 {
+        if actual_len == 0 {
             return Err(StoreError::EmptyEmbedding);
         }
 
         if let Some(first_doc) = self.documents.first() {
-            let expected_len = first_doc.len();
+            let expected_len = first_doc.embedding.len();
 
             if actual_len != expected_len {
                 return Err(StoreError::DimensionMismatch {
@@ -38,6 +40,28 @@ impl VectorStore {
         self.documents.push(document);
 
         Ok(())
+    }
+
+    pub fn search(&self, query_embedding: &[f32], top_k: usize) -> Vec<SearchResult> {
+        let mut res: Vec<SearchResult> = self.documents
+            .iter()
+            .map(|document| SearchResult {
+                id: document.id.clone(),
+                text: document.text.clone(),
+                score: cosine_similarity(query_embedding, &document.embedding),
+            })
+            .collect();
+
+        res.sort_by(|a, b| {
+            a.score
+                .partial_cmp(&b.score)
+                .unwrap_or(Ordering::Equal)
+                .reverse()
+        });
+
+        res.truncate(top_k);
+
+        res
     }
 }
 
@@ -90,5 +114,98 @@ mod tests {
         let result = cosine_similarity(&a, &b);
 
         assert!((result + 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn search_returns_best_match_first() {
+        let mut store = VectorStore::new();
+
+        store.add(Document {
+            id: "a".to_string(),
+            text: "test 1".to_string(),
+            embedding: vec![1.0, 0.0],
+        });
+
+        store.add(Document {
+            id: "b".to_string(),
+            text: "test 2".to_string(),
+            embedding: vec![0.9, 0.1],
+        });
+
+        store.add(Document {
+            id: "c".to_string(),
+            text: "test 3".to_string(),
+            embedding: vec![0.0, 1.0],
+        });
+
+        let results = store.search(&[1.0, 0.0], 3);
+
+        assert_eq!(results.len(), 3);
+        assert_eq!(results[0].id, "a");
+        assert_eq!(results[1].id, "b");
+        assert_eq!(results[2].id, "c");
+    }
+
+    #[test]
+    fn search_on_empty_store_returns_empty() {
+        let store = VectorStore::new();
+
+        let results = store.search(&[1.0, 0.0], 3);
+
+        assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn search_respects_top_k() {
+        let mut store = VectorStore::new();
+
+        store.add(Document {
+            id: "a".to_string(),
+            text: "test 1".to_string(),
+            embedding: vec![1.0, 0.0],
+        });
+
+        store.add(Document {
+            id: "b".to_string(),
+            text: "test 2".to_string(),
+            embedding: vec![0.9, 0.1],
+        });
+
+        store.add(Document {
+            id: "c".to_string(),
+            text: "test 3".to_string(),
+            embedding: vec![0.0, 1.0],
+        });
+
+        let results = store.search(&[1.0, 0.0], 2);
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].id, "a");
+        assert_eq!(results[1].id, "b");
+    }
+
+    #[test]
+    fn add_rejects_mismatched_dimensions() {
+        let mut store = VectorStore::new();
+
+        store.add(Document {
+            id: "a".to_string(),
+            text: "three dimensions".to_string(),
+            embedding: vec![1.0, 0.0, 1.0],
+        });
+
+        let res = store.add(Document {
+            id: "b".to_string(),
+            text: "2 dimensions".to_string(),
+            embedding: vec![0.9, 0.1],
+        });
+
+        assert!(matches!(
+            res,
+            Err(StoreError::DimensionMismatch {
+                expected: 3,
+                actual: 2,
+            })
+        ));
     }
 }

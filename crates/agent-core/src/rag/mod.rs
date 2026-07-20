@@ -22,6 +22,7 @@ pub enum EmbedError {
     Decode(String),
 }
 
+#[derive(Debug, Error)]
 pub enum StoreError {
     #[error("Embedding cannot be empty.")]
     EmptyEmbedding,
@@ -31,6 +32,12 @@ pub enum StoreError {
         expected: usize,
         actual: usize,
     }
+}
+
+pub struct SearchResult {
+    id: String,
+    text: String,
+    score: f32,
 }
 
 #[async_trait::async_trait]
