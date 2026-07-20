@@ -36,9 +36,11 @@ impl Embedder for OllamaEmbedder {
             prompt: text.to_string(),
         };
 
+        let url = format!("{}/api/embeddings", &self.base_url.trim_end_matches('/'));
+        println!("{}", url);
         let response = self
             .http
-            .post(&self.base_url)
+            .post(url)
             .json(&ollama_request)
             .send()
             .await
@@ -57,10 +59,10 @@ impl Embedder for OllamaEmbedder {
             });
         }
 
-        let ollama_response = serde_json::from_str(&body)
+        let ollama_response: OllamaEmbeddingResponse = serde_json::from_str(&body)
             .map_err(|error| EmbedError::Decode(error.to_string()))?;
 
-        Ok(ollama_response)
+        Ok(ollama_response.embedding)
     }
 }
 
@@ -86,7 +88,7 @@ mod tests {
             .and(path("/api/embeddings"))
             .respond_with(
                 ResponseTemplate::new(200)
-                    .set_body_string("not valid json"))
+                    .set_body_json(response))
             .mount(&server)
             .await;
         
