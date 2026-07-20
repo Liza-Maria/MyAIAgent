@@ -36,11 +36,13 @@ impl Embedder for OllamaEmbedder {
             prompt: text.to_string(),
         };
 
-        let url = format!("{}/api/embeddings", &self.base_url.trim_end_matches('/'));
-        println!("{}", url);
+
+
+        let url = format!("{}/api/embeddings", self.base_url.trim_end_matches('/'));
+
         let response = self
             .http
-            .post(url)
+            .post(&url)
             .json(&ollama_request)
             .send()
             .await
@@ -61,6 +63,10 @@ impl Embedder for OllamaEmbedder {
 
         let ollama_response: OllamaEmbeddingResponse = serde_json::from_str(&body)
             .map_err(|error| EmbedError::Decode(error.to_string()))?;
+
+        if ollama_response.embedding.is_empty() {
+            return Err(EmbedError::InvalidResponse);
+        }
 
         Ok(ollama_response.embedding)
     }
@@ -91,7 +97,7 @@ mod tests {
                     .set_body_json(response))
             .mount(&server)
             .await;
-        
+
         let ollama_embedder = OllamaEmbedder::new(
             server.uri(),
             "test embedding");
@@ -103,5 +109,26 @@ mod tests {
 
         assert_eq!(embedding_result.len(), 10);
         assert_eq!(embedding_result[0], 0.012345);
+    }
+
+    #[tokio::test]
+    async fn test_ollama_embedder_invalid_json() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/embeddings"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_string("not valid json"))
+            .mount(&server)
+            .await;
+
+        let ollama_embedder = OllamaEmbedder::new(
+            server.uri(),
+            "test embedding");
+
+        let embedding_result = ollama_embedder.embed("some text").await;
+
+        assert!(matches!(embedding_result, Err(EmbedError::Decode(_))));
     }
 }
