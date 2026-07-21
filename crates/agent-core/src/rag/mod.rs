@@ -2,7 +2,11 @@ use thiserror::Error;
 
 pub mod store;
 pub mod embedder;
-pub use store::cosine_similarity;
+pub mod retriever;
+
+pub use retriever::Retriever;
+pub use embedder::{OllamaEmbedder};
+pub use store::{Document, VectorStore, cosine_similarity};
 
 #[derive(Error, Debug)]
 pub enum EmbedError {
@@ -23,11 +27,20 @@ pub enum EmbedError {
 }
 
 #[derive(Debug, Error)]
+pub enum RetrieveError {
+    #[error("embedding failed: {0}")]
+    Embed(#[from] EmbedError),
+
+    #[error("store failed: {0}")]
+    Store(#[from] StoreError),
+}
+
+#[derive(Debug, Error)]
 pub enum StoreError {
     #[error("Embedding cannot be empty.")]
     EmptyEmbedding,
 
-    #[error("Embedding dimentions: expected {expected}, got {actual}")]
+    #[error("Embedding dimensions: expected {expected}, got {actual}")]
     DimensionMismatch {
         expected: usize,
         actual: usize,
@@ -35,9 +48,9 @@ pub enum StoreError {
 }
 
 pub struct SearchResult {
-    id: String,
-    text: String,
-    score: f32,
+    pub id: String,
+    pub text: String,
+    pub score: f32,
 }
 
 #[async_trait::async_trait]

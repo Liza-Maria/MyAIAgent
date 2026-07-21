@@ -124,19 +124,19 @@ mod tests {
             id: "a".to_string(),
             text: "test 1".to_string(),
             embedding: vec![1.0, 0.0],
-        });
+        }).unwrap();
 
         store.add(Document {
             id: "b".to_string(),
             text: "test 2".to_string(),
             embedding: vec![0.9, 0.1],
-        });
+        }).unwrap();
 
         store.add(Document {
             id: "c".to_string(),
             text: "test 3".to_string(),
             embedding: vec![0.0, 1.0],
-        });
+        }).unwrap();
 
         let results = store.search(&[1.0, 0.0], 3);
 
@@ -163,19 +163,19 @@ mod tests {
             id: "a".to_string(),
             text: "test 1".to_string(),
             embedding: vec![1.0, 0.0],
-        });
+        }).unwrap();
 
         store.add(Document {
             id: "b".to_string(),
             text: "test 2".to_string(),
             embedding: vec![0.9, 0.1],
-        });
+        }).unwrap();
 
         store.add(Document {
             id: "c".to_string(),
             text: "test 3".to_string(),
             embedding: vec![0.0, 1.0],
-        });
+        }).unwrap();
 
         let results = store.search(&[1.0, 0.0], 2);
 
@@ -192,7 +192,7 @@ mod tests {
             id: "a".to_string(),
             text: "three dimensions".to_string(),
             embedding: vec![1.0, 0.0, 1.0],
-        });
+        }).unwrap();
 
         let res = store.add(Document {
             id: "b".to_string(),
