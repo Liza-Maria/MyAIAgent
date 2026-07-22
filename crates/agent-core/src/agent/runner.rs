@@ -3,6 +3,7 @@ use super::{ AgentConfig, AgentError };
 use super::{ LlmClient, LlmConfig, LlmError, Message };
 use crate::tools::registry::ToolRegistry;
 use crate::memory::Memory;
+use crate::rag::Retriever;
 
 #[derive(Debug)]
 pub struct Agent {
@@ -10,6 +11,7 @@ pub struct Agent {
     pub config: AgentConfig,
     pub tool: ToolRegistry,
     pub memory: Box<dyn Memory>,
+    pub retriever: Option<Retriever>,
 }
 
 impl Agent {
@@ -17,14 +19,34 @@ impl Agent {
             llm_config: LlmConfig,
             config: AgentConfig,
             tool: ToolRegistry,
-            memory: Box<dyn Memory>,
+            memory: Box<dyn Memory>
         ) -> Self {
         Self {
             llm_client: LlmClient::new(llm_config),
             config,
             tool,
             memory,
+            retriever: None,
         }
+    }
+
+    pub fn add_retriever(&mut self, retriever: Retriever) -> Self {
+        self.retriever = Some(retriever);
+
+        self
+    }
+
+    fn build_augmented_prompt(base_prompt: &str, results: &[SearchResult]) -> String {
+        if results.is_empty() {
+            return base_prompt.to_string();
+        }
+
+        results
+            .iter()
+            .enumerate()
+            .map(|(index, result)| {
+                format!("[{}] {}", index, result.text)
+            });
     }
 
     #[instrument(skip(goal), fields(goal = %goal))]

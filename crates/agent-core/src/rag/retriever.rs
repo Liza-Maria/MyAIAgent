@@ -6,6 +6,7 @@ use super::{
     Embedder,
     EmbedError};
 
+    #[derive(Debug)]
 pub struct Retriever {
     embedder: Box<dyn Embedder>,
     store: VectorStore,

@@ -54,6 +54,6 @@ pub struct SearchResult {
 }
 
 #[async_trait::async_trait]
-pub trait Embedder {
+pub trait Embedder: Debug + Send + Sync {
     async fn embed(&self, text: &str) -> Result<Vec<f32>, EmbedError>;
 }

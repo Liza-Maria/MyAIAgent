@@ -1,5 +1,6 @@
 use super::LlmError;
 use super::ToolError;
+use crate::rag::RetrieveError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AgentError {
@@ -19,5 +20,8 @@ pub enum AgentError {
     InvalidArgument,
 
     #[error("Tool failed")]
-    Tool(#[from] ToolError)
+    Tool(#[from] ToolError),
+
+    #[error("Retrieve call failed")]
+    Retriever(#[from] RetrieveError),
 }
