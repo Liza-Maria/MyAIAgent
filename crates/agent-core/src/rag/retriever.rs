@@ -74,6 +74,17 @@ mod tests {
 
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].id, "c");
+        assert_eq!(results[1].id, "d");
+    }
+
+    #[tokio::test]
+    async fn retrieve_returns_invalid_response() {
+        let embedder = Box::new(FakeEmbedder);
+        let mut retriever = Retriever::new(embedder);
+
+        let result = retriever.retrieve("query", 3).await;
+
+        assert!(matches!(result, Err(RetrieveError::Embed(EmbedError::InvalidResponse))));
     }
 
     #[tokio::test]
@@ -84,5 +95,31 @@ mod tests {
         let results = retriever.retrieve("cat query", 3).await.unwrap();
 
         assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn retrieve_top_k() {
+        let embedder = Box::new(FakeEmbedder);
+        let mut retriever = Retriever::new(embedder);
+
+        retriever
+            .index("cat 1", "cat document")
+            .await
+            .expect("cat document should be added");
+
+        retriever
+            .index("cat 2", "cat document 2")
+            .await
+            .expect("cat document 2 should be added");
+
+        retriever
+            .index("dog 1", "dog document 1")
+            .await
+            .expect("dog document 1 should be added");
+
+        let results = retriever.retrieve("cat query", 1).await.unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "cat 1");
     }
 }
