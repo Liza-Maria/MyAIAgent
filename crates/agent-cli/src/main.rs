@@ -61,16 +61,16 @@ async fn run(goal: String) -> Result<()> {
     let agent_config = AgentConfig::default();
 
     let mut tools = ToolRegistry::new();
-    tools.register(CalculatorTool);
+    //tools.register(CalculatorTool);
 
     let memory = SlidingWindow {
         max_messages: 20,
     };
 
-    let url = std::env::var("OPENAI_BASE_URL")?;
+    let url = std::env::var("OLLAMA_BASE_URL").unwrap_or_else(|_| "http://localhost:11434".to_string());
     let model = std::env::var("OPENAI_EMBEDDER_MODEL")?;
-    //let embedder = OllamaEmbedder::new(url, model);
-    let embedder = OllamaEmbedder::new("http://localhost:11434", "nomic-embed-text");
+
+    let embedder = OllamaEmbedder::new(&url, &model);
     let mut retriever = Retriever::new(Box::new(embedder));
 
     retriever.index("fact-1", "The project's mascot is a rusty crab named Ferris.").await?;
