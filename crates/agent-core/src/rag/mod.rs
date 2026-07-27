@@ -1,4 +1,5 @@
 use thiserror::Error;
+use std::fmt::Debug;
 
 pub mod store;
 pub mod embedder;

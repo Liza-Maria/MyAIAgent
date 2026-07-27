@@ -1,9 +1,9 @@
 use tracing::instrument;
 use super::{ AgentConfig, AgentError };
-use super::{ LlmClient, LlmConfig, LlmError, Message };
+use super::{ LlmClient, LlmConfig, Message };
 use crate::tools::registry::ToolRegistry;
 use crate::memory::Memory;
-use crate::rag::Retriever;
+use crate::rag::{ Retriever, SearchResult };
 
 #[derive(Debug)]
 pub struct Agent {
@@ -30,31 +30,48 @@ impl Agent {
         }
     }
 
-    pub fn add_retriever(&mut self, retriever: Retriever) -> Self {
+    pub fn with_retriever(mut self, retriever: Retriever) -> Self {
         self.retriever = Some(retriever);
 
         self
     }
 
+    #[allow(dead_code)]
     fn build_augmented_prompt(base_prompt: &str, results: &[SearchResult]) -> String {
         if results.is_empty() {
             return base_prompt.to_string();
         }
 
-        results
+        let context = results
             .iter()
             .enumerate()
             .map(|(index, result)| {
                 format!("[{}] {}", index, result.text)
-            });
+            })
+            .collect::<Vec<_>>()
+            .join("/n");
+
+        format!("{base_prompt} /n/n Use the following context to answear: {context}")
     }
 
     #[instrument(skip(goal), fields(goal = %goal))]
     pub async fn run(&self, goal: &str) -> Result<String, AgentError> {
+
+        let mut system_prompt;
+        match &self.retriever {
+            Some(retriever) => {
+                let retrieved = retriever.retrieve(goal, 3).await?;
+                system_prompt = Self::build_augmented_prompt(&self.config.system_prompt, &retrieved);
+            },
+            None => {
+                system_prompt = self.config.system_prompt.clone();
+            }
+        }
+
         let current_message: String = goal.into();
-        let mut history = vec![Message::system(self.config.system_prompt.clone()),
+        let mut history = vec![Message::system(system_prompt.clone()),
                             Message::user(current_message)];
-        
+
         for _iteration in 0..self.config.max_iterations {
             let history_window = self.memory.window(&history);
 
@@ -67,7 +84,7 @@ impl Agent {
             let choice = response.choices
                                 .into_iter()
                                 .next()
-                                .ok_or(AgentError::EmptyResponse)?;
+                                .ok_or(AgentError::NoChoice)?;
 
             let message = choice.message;
 
@@ -76,7 +93,7 @@ impl Agent {
                 
                 for tool_call in tool_calls {
                     let arguments = serde_json::from_str(&tool_call.function.arguments)
-                            .map_err(|error| { AgentError::InvalidArgument })?;
+                            .map_err(|_| { AgentError::InvalidArgument })?;
 
                     let result = self.tool.execute(&tool_call.function.name, arguments)?;
 

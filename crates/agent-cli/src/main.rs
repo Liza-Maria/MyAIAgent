@@ -1,11 +1,13 @@
 use agent_core::telemetry;
 use anyhow::Result;
 use clap:: { Parser, Subcommand };
-use agent_core::llm::{ LlmClient, LlmConfig , Role, Message};
-use agent_core::agent::{ Agent, AgentConfig };
-use agent_core::tools::{ToolRegistry, CalculatorTool};
-use agent_core::memory::SlidingWindow;
 use dotenvy::dotenv;
+
+use agent_core::llm::{ LlmClient, LlmConfig , Role, Message };
+use agent_core::agent::{ Agent, AgentConfig };
+use agent_core::tools::{ ToolRegistry, CalculatorTool };
+use agent_core::memory::SlidingWindow;
+use agent_core::rag::{ OllamaEmbedder, Retriever };
 
 #[derive(Debug, Parser)]
 #[command(name = "agent", version, about = "Rust AI Agent Runtime")]
@@ -31,8 +33,8 @@ enum Command {
 
 #[tracing::instrument]
 async fn doctor() -> Result<()> {
-    tracing::info!(version = agent_core::version(), "agent runtime ok");
-    tracing::debug!("debug logging is enabled");
+    println!("Agent is running healthy");
+    
     Ok(())
 }
 
@@ -65,7 +67,17 @@ async fn run(goal: String) -> Result<()> {
         max_messages: 20,
     };
 
-    let agent = Agent::new(llm_config, agent_config, tools, Box::new(memory));
+    let url = std::env::var("OPENAI_BASE_URL")?;
+    let model = std::env::var("OPENAI_EMBEDDER_MODEL")?;
+    //let embedder = OllamaEmbedder::new(url, model);
+    let embedder = OllamaEmbedder::new("http://localhost:11434", "nomic-embed-text");
+    let mut retriever = Retriever::new(Box::new(embedder));
+
+    retriever.index("fact-1", "The project's mascot is a rusty crab named Ferris.").await?;
+    retriever.index("fact-2", "The agent runtime was built in eight stages.").await?;
+
+    let agent = Agent::new(llm_config, agent_config, tools, Box::new(memory))
+                        .with_retriever(retriever);
 
     let result = agent.run(&goal).await?;
     println!("{}", result);

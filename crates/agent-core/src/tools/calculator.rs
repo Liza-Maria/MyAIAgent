@@ -34,7 +34,7 @@ impl Tool for CalculatorTool {
         let expression = args["expression"]
                             .as_str()
                             .ok_or_else(|| ToolError::InvalidArguments{
-                                tool: "calulator".to_string(),
+                                tool: "Calculator".to_string(),
                                 args: "missing string field `expression`".to_string(),
                             })?;
 

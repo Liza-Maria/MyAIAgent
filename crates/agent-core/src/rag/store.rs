@@ -2,12 +2,14 @@ use std::cmp::Ordering;
 
 use super::{ StoreError, SearchResult };
 
+#[derive(Debug)]
 pub struct Document {
     pub id: String,
     pub text: String,
     pub embedding: Vec<f32>,
 }
 
+#[derive(Debug)]
 pub struct VectorStore {
     pub documents: Vec<Document>,
 }

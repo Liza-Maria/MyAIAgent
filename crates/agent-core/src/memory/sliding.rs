@@ -23,8 +23,11 @@ impl Memory for SlidingWindow {
             keep.get(start).map(|message| &message.role),
             Some(Role::Tool)
         ) {
-            let mut pos = start - 1;
-            while pos >= 0 {
+            let mut pos = start;
+
+            while pos > 0 {
+                pos -= 1;
+
                 if  matches!(
                     history.get(pos).map(|message| &message.role),
                     Some(Role::Assistant)
@@ -32,8 +35,6 @@ impl Memory for SlidingWindow {
                     result.push(history[pos].clone());
                     break;
                 }
-                
-                pos -= 1;
             }
         }
 

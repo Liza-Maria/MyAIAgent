@@ -48,6 +48,7 @@ impl Retriever {
 mod tests {
     use super::*;
 
+    #[derive(Debug)]
     struct FakeEmbedder;
 
     #[async_trait::async_trait]

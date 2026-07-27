@@ -27,10 +27,10 @@ impl ToolRegistry {
             .collect()
     }
 
-    pub fn execute(&self, toolName: &str, args: Value) -> Result<String, ToolError> {
-        match self.tools.get(toolName) {
+    pub fn execute(&self, tool_name: &str, args: Value) -> Result<String, ToolError> {
+        match self.tools.get(tool_name) {
             Some(tool) => tool.execute(args),
-            None => Err(ToolError::NotFound(toolName.to_string())),
+            None => Err(ToolError::NotFound(tool_name.to_string())),
         }
     }
 }

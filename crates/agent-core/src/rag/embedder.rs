@@ -12,6 +12,7 @@ pub struct OllamaEmbeddingResponse {
     embedding: Vec<f32>,
 }
 
+#[derive(Debug)]
 pub struct OllamaEmbedder {
     http: reqwest::Client,
     base_url: String,
