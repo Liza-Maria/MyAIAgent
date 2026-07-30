@@ -4,6 +4,7 @@ use std::fmt::Debug;
 pub mod store;
 pub mod embedder;
 pub mod retriever;
+pub mod chunker;
 
 pub use retriever::Retriever;
 pub use embedder::{OllamaEmbedder};
