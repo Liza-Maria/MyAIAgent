@@ -6,6 +6,13 @@ use super::{
     Embedder,
     EmbedError};
 
+    #[derive(Debug, Default, Clone, PartialEq)]
+    pub struct IngestReport {
+        pub files_indexed: usize,
+        pub chunks_indexed: usize,
+        pub files_skipped: usize,
+    }
+
     #[derive(Debug)]
 pub struct Retriever {
     embedder: Box<dyn Embedder>,
@@ -41,6 +48,49 @@ impl Retriever {
         let result = self.store.search(&embedding, top_k);
 
         Ok(result)
+    }
+
+    pub fn save(&self, path: &Path) -> Result<(), RetriveError> {
+        self.store.save(path, self.embedder.model())?;
+
+        Ok(())
+    }
+
+    pub fn load(&mut self, path: &Path) -> Result<u32, RetrieveError> {
+        let res = self.load(path, self.embedder.model())?;
+        self.store = res;
+
+        Ok(res.documents.len())
+    }
+
+    pub async fn index_file(&mut self, path: &Path) -> Result<(), RetriveError> {
+        let text = std::fs::read_to_string(path)?;
+
+        let id = path.to_string_lossy().to_string();
+
+        self.index(&id, &text).await?;
+
+        Ok(())
+    }
+
+    pub async fn index_directory(&mut self, root: &Path, extensions: &[&str]) 
+        -> Result<IngestReport, RetriveError> 
+        {
+        let mut report = IngestReport::default();
+
+        let metadata = std::fs::metadata(root)?;
+
+        if metadata.is_dir() {
+            let entries = std::fs::read_dir(root)?;
+
+            for entry in entries {
+                let file_path = entry.path();
+
+                self.index_file(file_path).await?;
+            }
+        }
+
+        Ok(())
     }
 }
 

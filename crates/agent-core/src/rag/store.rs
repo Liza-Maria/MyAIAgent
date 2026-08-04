@@ -1,8 +1,9 @@
 use std::cmp::Ordering;
+use std::path:Path;
 
 use super::{ StoreError, SearchResult };
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
     pub id: String,
     pub text: String,
@@ -65,8 +66,64 @@ impl VectorStore {
 
         res
     }
-}
 
+    pub fn save(&self, path: &Path, embedding_model: &str) -> Result<(), StoreError> {
+        let dimensions = self.documents
+                            .first()
+                            .map(|doc| doc.embedding.len())
+                            .unwrap_or(0);
+
+        let index = PersistentIndex {
+            version: INDEX_VERSION,
+            embedding_model,
+            dimensions,
+            documents: self.documents.clone(),
+        };
+
+        if let Some(parent) = path.parent() {
+            if parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent)?;
+            }
+        }
+
+        let json = serde_json::to_vec_pretty(&index)?;
+
+        let name_path = path.with_extension("json.temp");
+
+        std::fs::write(&name_path, json)?;
+
+        std::fs::rename(&name_path, path)?;
+
+        Ok(())
+    }
+
+    pub fn load(path: &Path, expected_model: &str) -> Result<Self, StoreError> {
+        let bytes = std::fs::read()?;
+
+        let index: PersistentIndex = serde_json::from_slice(&bytes)?;
+
+        if index.embedding_model != expected_model {
+            return Err(StoreError::ModelMismatch {
+                expected: expected_model,
+                actual: index.embedding_model,
+            });
+        }
+
+        if index.version != INDEX_VERSION {
+            return StoreError::UnsupportedVersion {
+                version: index.version.
+            };
+        }
+
+        let mut store = VectorStore::new();
+
+        for document in index.documents {
+            store.add(document)?;
+        }
+
+        Ok(store)
+    }
+}
 pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     if a.is_empty() || a.len() != b.len() {
         return 0.0;

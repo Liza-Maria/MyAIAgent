@@ -71,6 +71,10 @@ impl Embedder for OllamaEmbedder {
 
         Ok(ollama_response.embedding)
     }
+
+    fn model(&self) -> &str {
+        &self.model
+    }
 }
 
 #[cfg(test)]
