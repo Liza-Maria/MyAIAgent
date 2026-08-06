@@ -11,6 +11,7 @@ pub use retriever::Retriever;
 pub use embedder::{OllamaEmbedder};
 pub use store::{Document, VectorStore, cosine_similarity};
 pub use persist::{ PersistentIndex, INDEX_VERSION };
+pub use chunker::{ Chunker };
 
 #[derive(Error, Debug)]
 pub enum EmbedError {
@@ -38,11 +39,8 @@ pub enum RetrieveError {
     #[error("store failed: {0}")]
     Store(#[from] StoreError),
 
-    #[error("Could not read path: {path} source: {source}")]
-    Io {
-        path: String,
-        source: std::io::Error,
-    }
+    #[error("Could not read path: {0}")]
+    Io(#[from] std::io::Error)
 }
 
 #[derive(Debug, Error)]

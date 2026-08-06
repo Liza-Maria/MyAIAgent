@@ -105,10 +105,11 @@ mod tests {
 
         let ollama_embedder = OllamaEmbedder::new(
             server.uri(),
-            "test embedding");
+            "model");
 
 
-        let embedding_result = ollama_embedder.embed("Artificial intelligence is transforming the world.")
+        let embedding_result = ollama_embedder
+            .embed("Artificial intelligence is transforming the world.")
             .await
             .expect("deserialized");
 

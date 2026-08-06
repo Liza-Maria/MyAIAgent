@@ -1,10 +1,15 @@
+use std::fs::Metadata;
+
 use super::{
     RetrieveError,
     SearchResult,
     Document,
     VectorStore,
     Embedder,
-    EmbedError};
+    EmbedError,
+    Chunker};
+
+use std::path::{ Path, PathBuf };
 
     #[derive(Debug, Default, Clone, PartialEq)]
     pub struct IngestReport {
@@ -16,13 +21,19 @@ use super::{
     #[derive(Debug)]
 pub struct Retriever {
     embedder: Box<dyn Embedder>,
+    chunker: Box<dyn Chunker>,
     store: VectorStore,
 }
 
+fn print_type<T>(_: &T) {
+      println!("{}", std::any::type_name::<T>());
+  }
+
 impl Retriever {
-    pub fn new(embedder: Box<dyn Embedder>) -> Self {
+    pub fn new(embedder: Box<dyn Embedder>, chunker: Box<dyn Chunker>) -> Self {
         Self {
             embedder,
+            chunker,
             store: VectorStore::new(),
         }
     }
@@ -50,47 +61,88 @@ impl Retriever {
         Ok(result)
     }
 
-    pub fn save(&self, path: &Path) -> Result<(), RetriveError> {
+    pub fn save(&self, path: &Path) -> Result<(), RetrieveError> {
         self.store.save(path, self.embedder.model())?;
 
         Ok(())
     }
 
-    pub fn load(&mut self, path: &Path) -> Result<u32, RetrieveError> {
-        let res = self.load(path, self.embedder.model())?;
+    pub fn load(&mut self, path: &Path) -> Result<usize, RetrieveError> {
+        let res = VectorStore::load(path, self.embedder.model())?;
+        let length = res.documents.len();
         self.store = res;
 
-        Ok(res.documents.len())
+        Ok(length)
     }
 
-    pub async fn index_file(&mut self, path: &Path) -> Result<(), RetriveError> {
+    pub async fn index_document(&mut self, doc_id: &str, text: &str) -> Result<usize, RetrieveError> {
+        let chunks = self.chunker.chunk(text);
+        
+        let mut docs: Vec<Document> = Vec::new();
+
+        for (id, chunk) in chunks.iter().enumerate() {
+            let chunk_id = format!("{doc_id}#chunk_{id}");
+
+            self.index(&chunk_id, text).await?;
+        }
+
+        Ok(chunks.len())
+    }
+
+    pub async fn index_file(&mut self, path: &Path) -> Result<usize, RetrieveError> {
         let text = std::fs::read_to_string(path)?;
 
         let id = path.to_string_lossy().to_string();
 
-        self.index(&id, &text).await?;
-
-        Ok(())
+        Ok(self.index_document(&id, &text).await?)
     }
 
     pub async fn index_directory(&mut self, root: &Path, extensions: &[&str]) 
-        -> Result<IngestReport, RetriveError> 
+        -> Result<IngestReport, RetrieveError> 
         {
         let mut report = IngestReport::default();
 
-        let metadata = std::fs::metadata(root)?;
+        let mut pending: Vec<PathBuf> = vec![root.to_path_buf()];
+        
+        while let Some(element) = pending.pop() {
+            let metadata = std::fs::metadata(&element)
+                            .map_err(|err| RetrieveError::Io(err))?;
+            if metadata.is_dir() {
+                let mut children: Vec<PathBuf> = Vec::new();
 
-        if metadata.is_dir() {
-            let entries = std::fs::read_dir(root)?;
+                let entries = std::fs::read_dir(&element)
+                                .map_err(|err| RetrieveError::Io(err))?;
+    
+                for entry in entries {
+                    let entry = entry.map_err(|err| RetrieveError::Io(err))?;
+                    children.push(entry.path());
+                }
 
-            for entry in entries {
-                let file_path = entry.path();
+                children.sort();
+                children.reverse();
+                pending.extend(children);
+            } else if metadata.is_file() {
+                let matches = element.extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|exten| { extensions
+                                .iter()
+                                .any(|allowed_ext| allowed_ext
+                                                    .eq_ignore_ascii_case(exten))})
+                                                    .unwrap_or(false);
 
-                self.index_file(file_path).await?;
+                if !matches {
+                    report.files_skipped += 1;
+                    continue;
+                } 
+
+                let indexed_chunks = self.index_file(&element).await?;
+
+                report.chunks_indexed += indexed_chunks;
+                report.files_indexed += 1;
             }
         }
 
-        Ok(())
+        Ok(report)
     }
 }
 

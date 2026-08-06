@@ -1,5 +1,7 @@
 use std::cmp::Ordering;
-use std::path:Path;
+use std::path::Path;
+use serde::{ Serialize, Deserialize };
+use super::{ INDEX_VERSION, PersistentIndex };
 
 use super::{ StoreError, SearchResult };
 
@@ -75,13 +77,13 @@ impl VectorStore {
 
         let index = PersistentIndex {
             version: INDEX_VERSION,
-            embedding_model,
+            embedding_model: embedding_model.to_string(),
             dimensions,
             documents: self.documents.clone(),
         };
 
         if let Some(parent) = path.parent() {
-            if parent.as_os_str().is_empty() {
+            if !parent.as_os_str().is_empty() {
                 std::fs::create_dir_all(parent)?;
             }
         }
@@ -98,21 +100,21 @@ impl VectorStore {
     }
 
     pub fn load(path: &Path, expected_model: &str) -> Result<Self, StoreError> {
-        let bytes = std::fs::read()?;
+        let bytes = std::fs::read(path)?;
 
         let index: PersistentIndex = serde_json::from_slice(&bytes)?;
 
         if index.embedding_model != expected_model {
             return Err(StoreError::ModelMismatch {
-                expected: expected_model,
+                expected: expected_model.to_string(),
                 actual: index.embedding_model,
             });
         }
 
         if index.version != INDEX_VERSION {
-            return StoreError::UnsupportedVersion {
-                version: index.version.
-            };
+            return Err(StoreError::UnsupportedVersion {
+                version: index.version
+            });
         }
 
         let mut store = VectorStore::new();
