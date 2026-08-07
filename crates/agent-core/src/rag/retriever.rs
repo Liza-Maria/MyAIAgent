@@ -83,7 +83,7 @@ impl Retriever {
         for (id, chunk) in chunks.iter().enumerate() {
             let chunk_id = format!("{doc_id}#chunk_{id}");
 
-            self.index(&chunk_id, text).await?;
+            self.index(&chunk_id, chunk).await?;
         }
 
         Ok(chunks.len())
@@ -262,13 +262,30 @@ mod tests {
 
         let seen = tape.lock().unwrap();
 
-        println!("res: {:?}", res);
-        println!("seen: {:?}", seen);
-        println!("docs len: {:?}", retriever.store.documents.len());
-
         assert_eq!(res, 3);
         assert_eq!(*seen, vec!["aaaaaaaaaa".to_string(), "bbbbbbbbbb".to_string(), "cccccccccc".to_string()]);
         assert_eq!(retriever.store.documents.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn ids_are correctlu_suffixed_per_chunk() {
+        let embedder = RecordingEmbedder::new("RecordingEmbedder");
+        let chunker = chunker(10, 0);
+
+        let mut retriever = Retriever::new(Box::new(embedder), chunker);
+
+        let text = "aaaaaaaaaabbbbbbbbbbcccccccccc";
+
+        let res = retriever.index_document("doc", text).await.unwrap();
+
+        let ids: Vec<&str> = retriver
+                                .store
+                                .documents
+                                .iter()
+                                .map(|doc| doc.id.as_str())
+                                .collect();
+
+        assert_eq!()
     }
 
     #[tokio::test]
