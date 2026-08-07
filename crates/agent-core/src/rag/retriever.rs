@@ -90,7 +90,11 @@ impl Retriever {
     }
 
     pub async fn index_file(&mut self, path: &Path) -> Result<usize, RetrieveError> {
-        let text = std::fs::read_to_string(path)?;
+        let text = std::fs::read_to_string(path)
+                    .map_err(|error| RetrieveError::Io {
+                        path: path.display().to_string(),
+                        source: error,
+                    })?;
 
         let id = path.to_string_lossy().to_string();
 
@@ -106,15 +110,25 @@ impl Retriever {
         
         while let Some(element) = pending.pop() {
             let metadata = std::fs::metadata(&element)
-                            .map_err(|err| RetrieveError::Io(err))?;
+                            .map_err(|error| RetrieveError::Io {
+                                path: element.display().to_string(),
+                                source: error,
+                            })?;
+
             if metadata.is_dir() {
                 let mut children: Vec<PathBuf> = Vec::new();
 
                 let entries = std::fs::read_dir(&element)
-                                .map_err(|err| RetrieveError::Io(err))?;
+                                .map_err(|error| RetrieveError::Io {
+                                    path: element.display().to_string(),
+                                    source: error,
+                                })?;
     
                 for entry in entries {
-                    let entry = entry.map_err(|err| RetrieveError::Io(err))?;
+                    let entry = entry.map_err(|error| RetrieveError::Io{
+                        path: element.display().to_string(),
+                        source: error,
+                    })?;
                     children.push(entry.path());
                 }
 
@@ -149,6 +163,8 @@ impl Retriever {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::chunker::FixedChunkSize;
+    use std::sync::{ Mutex, Arc };
 
     #[derive(Debug)]
     struct FakeEmbedder;
@@ -164,12 +180,102 @@ mod tests {
 
             Err(EmbedError::InvalidResponse)
         }
+
+        fn model(&self) -> &str {
+            "fake embedder"
+        }
+    }
+
+    #[derive(Debug)]
+    struct RecordingEmbedder {
+        seen: Arc<Mutex<Vec<String>>>,
+        model: String,
+    }
+
+    impl RecordingEmbedder {
+        pub fn new(model: &str) -> Self {
+            Self {
+                seen: Arc::new(Mutex::new(Vec::new())),
+                model: model.to_string(),
+            }
+        }
+
+        pub fn tape(&self) -> Arc<Mutex<Vec<String>>> {
+            Arc::clone(&self.seen)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Embedder for RecordingEmbedder {
+        async fn embed(&self, text: &str) -> Result<Vec<f32>, EmbedError> {
+            self.seen.lock().unwrap().push(text.to_string());
+
+            Ok(vec![text.len() as f32, 1.0])
+        }
+
+        fn model(&self) -> &str {
+            &self.model
+        }
+    }
+
+    fn chunker(size: usize, overlap: usize) -> Box<dyn Chunker> {
+        Box::new(FixedChunkSize::new(size, overlap))
+    }
+
+    fn recording(model: &str) -> (Retriever, Arc<Mutex<Vec<String>>>) {
+        let embedder = RecordingEmbedder::new(model);
+        let tape = embedder.tape();
+
+        let retriever = Retriever::new(Box::new(embedder), chunker(10, 3));
+
+        (retriever, tape)
+    }
+
+    /*#[tokio::test]
+    async fn test_index_allowed_files() {
+        let embedder = Box::new(FakeEmbedder);
+        let chunker = Box::new(FixedChunkSize::new(15, 3));
+
+        let mut retriever = Retriever::new(embedder, chunker);
+
+        let dir = tempfile::tempdir()?;
+        let file_path = dir.path().join("test.txt");
+
+        std::fs::write(&file_path, "hello from first text file used for testing index directory").unwrap();
+
+        assert!(file_path.exists());
+
+        let report = retriver.index_directory(&dir, &["txt", "doc"]).await?;
+    }*/
+
+    #[tokio::test]
+    async fn test_index_document() {
+        let embedder = RecordingEmbedder::new("RecordingEmbedder");
+        let tape = embedder.tape();
+
+        let chunker = chunker(10, 0);
+        let mut retriever = Retriever::new(Box::new(embedder), chunker);
+
+        let text = "aaaaaaaaaabbbbbbbbbbcccccccccc";
+
+        let res = retriever.index_document("doc", text).await.unwrap();
+
+        let seen = tape.lock().unwrap();
+
+        println!("res: {:?}", res);
+        println!("seen: {:?}", seen);
+        println!("docs len: {:?}", retriever.store.documents.len());
+
+        assert_eq!(res, 3);
+        assert_eq!(*seen, vec!["aaaaaaaaaa".to_string(), "bbbbbbbbbb".to_string(), "cccccccccc".to_string()]);
+        assert_eq!(retriever.store.documents.len(), 3);
     }
 
     #[tokio::test]
     async fn retrieve_returns_most_similar() {
         let embedder = Box::new(FakeEmbedder);
-        let mut retriever = Retriever::new(embedder);
+        let chunker = Box::new(FixedChunkSize::new(10, 3));
+        let mut retriever = Retriever::new(embedder, chunker);
 
         retriever.index("c", "cat").await.unwrap();
         retriever.index("d", "dog").await.unwrap();
@@ -184,7 +290,8 @@ mod tests {
     #[tokio::test]
     async fn retrieve_returns_invalid_response() {
         let embedder = Box::new(FakeEmbedder);
-        let mut retriever = Retriever::new(embedder);
+        let chunker = Box::new(FixedChunkSize::new(10, 3));
+        let mut retriever = Retriever::new(embedder, chunker);
 
         let result = retriever.retrieve("query", 3).await;
 
@@ -194,7 +301,8 @@ mod tests {
     #[tokio::test]
     async fn retrieve_on_empty_index_returns_empty() {
         let embedder = Box::new(FakeEmbedder);
-        let retriever = Retriever::new(embedder);
+        let chunker = Box::new(FixedChunkSize::new(10, 3));
+        let retriever = Retriever::new(embedder, chunker);
 
         let results = retriever.retrieve("cat query", 3).await.unwrap();
 
@@ -204,7 +312,8 @@ mod tests {
     #[tokio::test]
     async fn retrieve_top_k() {
         let embedder = Box::new(FakeEmbedder);
-        let mut retriever = Retriever::new(embedder);
+        let chunker = Box::new(FixedChunkSize::new(10, 3));
+        let mut retriever = Retriever::new(embedder, chunker);
 
         retriever
             .index("cat 1", "cat document")

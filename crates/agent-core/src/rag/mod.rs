@@ -39,8 +39,11 @@ pub enum RetrieveError {
     #[error("store failed: {0}")]
     Store(#[from] StoreError),
 
-    #[error("Could not read path: {0}")]
-    Io(#[from] std::io::Error)
+    #[error("Could not read path: {path} source error: {source}")]
+    Io {
+        path: String,
+        source: std::io::Error,
+    }
 }
 
 #[derive(Debug, Error)]
